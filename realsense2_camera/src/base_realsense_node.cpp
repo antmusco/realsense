@@ -385,6 +385,10 @@ void BaseRealSenseNode::getParameters()
     _pnh.param("unite_imu_method", unite_imu_method_str, DEFAULT_UNITE_IMU_METHOD);
     if (unite_imu_method_str == "linear_interpolation")
         _imu_sync_method = imu_sync_method::LINEAR_INTERPOLATION;
+    else if (unite_imu_method_str == "copy_monotonic")
+    {
+        _imu_sync_method = imu_sync_method::COPY_MONOTONIC;
+    }
     else if (unite_imu_method_str == "copy")
         _imu_sync_method = imu_sync_method::COPY;
     else
@@ -966,6 +970,33 @@ double BaseRealSenseNode::FillImuData_LinearInterpolation(const stream_index_pai
     return that_last_data.m_time;
 }
 
+double BaseRealSenseNode::FillImuData_CopyMonotonic(const stream_index_pair stream_index, const BaseRealSenseNode::CIMUHistory::imuData imu_data, sensor_msgs::Imu& imu_msg)
+{
+    static CIMUHistory::imuData accel_data({0, 0, 0}, 0);
+    static CIMUHistory::imuData gyro_data({0, 0, 0}, 0);
+
+    if (GYRO == stream_index)
+        gyro_data = imu_data;
+    else if (ACCEL == stream_index)
+        accel_data = imu_data;
+
+    double a_lag = (gyro_data.m_time - accel_data.m_time);
+    if(a_lag >= 0.016 || a_lag < 0.0)
+    {
+        // a_lag >= 0.016: We need to wait for the next accel data.
+        return -1;
+    }
+    else
+    {
+        imu_msg.angular_velocity.x = gyro_data.m_reading.x;
+        imu_msg.angular_velocity.y = gyro_data.m_reading.y;
+        imu_msg.angular_velocity.z = gyro_data.m_reading.z;
+        imu_msg.linear_acceleration.x = accel_data.m_reading.x;
+        imu_msg.linear_acceleration.y = accel_data.m_reading.y;
+        imu_msg.linear_acceleration.z = accel_data.m_reading.z;
+        return std::max(gyro_data.m_time, accel_data.m_time);
+    }
+}
 
 double BaseRealSenseNode::FillImuData_Copy(const stream_index_pair stream_index, const BaseRealSenseNode::CIMUHistory::imuData imu_data, sensor_msgs::Imu& imu_msg)
 {
@@ -1069,6 +1100,9 @@ void BaseRealSenseNode::imu_callback_sync(rs2::frame frame, imu_sync_method sync
                 case NONE: //Cannot really be NONE. Just to avoid compilation warning.
                 case COPY:
                     elapsed_camera_ms = FillImuData_Copy(stream_index, imu_data, imu_msg);
+                    break;
+                case COPY_MONOTONIC:
+                    elapsed_camera_ms = FillImuData_CopyMonotonic(stream_index, imu_data, imu_msg);
                     break;
                 case LINEAR_INTERPOLATION:
                     elapsed_camera_ms = FillImuData_LinearInterpolation(stream_index, imu_data, imu_msg);

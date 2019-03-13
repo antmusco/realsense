@@ -104,7 +104,7 @@ namespace realsense2_camera
         virtual ~BaseRealSenseNode() {}
 
     public:
-        enum imu_sync_method{NONE, COPY, LINEAR_INTERPOLATION};
+        enum imu_sync_method{NONE, COPY, COPY_MONOTONIC, LINEAR_INTERPOLATION};
 
     protected:
         class float3
@@ -212,6 +212,7 @@ namespace realsense2_camera
         void publishAlignedDepthToOthers(rs2::frameset frames, const ros::Time& t);
         static void callback(const ddynamic_reconfigure::DDMap& map, int, rs2::options sensor);
         double FillImuData_Copy(const stream_index_pair stream_index, const CIMUHistory::imuData imu_data, sensor_msgs::Imu& imu_msg);
+        double FillImuData_CopyMonotonic(const stream_index_pair stream_index, const CIMUHistory::imuData imu_data, sensor_msgs::Imu& imu_msg);
         double FillImuData_LinearInterpolation(const stream_index_pair stream_index, const CIMUHistory::imuData imu_data, sensor_msgs::Imu& imu_msg);
         static void ConvertFromOpticalFrameToFrame(float3& data);
         void imu_callback(rs2::frame frame);
